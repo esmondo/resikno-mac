@@ -44,7 +44,7 @@ $ resikno
     │     ░█─░█ ░█▄▄▄ ░█▄▄▄█ ▄█▄ ░█─░█ ░█──▀█ ░█▄▄▄█      │
     │                                                          │
     │            Lightweight Disk Cleanup for macOS            │
-    │                          v0.1.0                          │
+    │                          v0.2.0                          │
     │                                                          │
     ╰──────────────────────────────────────────────────────────╯
 
@@ -59,6 +59,8 @@ resikno ❯ status                # Show scan summary
 resikno ❯ clean caches          # Dry-run clean caches
 resikno ❯ clean --execute       # Actually delete files
 resikno ❯ restore --list        # List restore points
+resikno ❯ update                # Check for updates
+resikno ❯ version bump minor    # Bump version to 0.3.0
 resikno ❯ exit                  # Exit shell
 ```
 
@@ -72,6 +74,8 @@ resikno ❯ exit                  # Exit shell
 | `clean [category]` | Clean files (`--execute` to delete) |
 | `analyze [--large N]` | Find large files |
 | `restore [--list]` | Manage restore points |
+| `update [--check]` | Check for updates and install |
+| `version [set\|bump]` | Show or update version |
 | `help` | Show available commands |
 | `exit` / `q` | Exit shell |
 
