@@ -76,11 +76,12 @@ pub fn display() {
     );
     println!("    {}                                                          {}", gray.apply_to("│"), gray.apply_to("│"));
 
-    // Banner lines with gradient
+    // Banner lines with gradient - centered
+    // Banner is 47 chars, box interior is 58, so (58-47)/2 = 5.5 → 5 left, 6 right
     for line in BANNER_LINES {
-        print!("    {}               ", gray.apply_to("│"));
+        print!("    {}     ", gray.apply_to("│"));
         print_gradient_inline(line);
-        println!(" {}", gray.apply_to("│"));
+        println!("      {}", gray.apply_to("│"));
     }
 
     println!("    {}                                                          {}", gray.apply_to("│"), gray.apply_to("│"));
