@@ -1,143 +1,129 @@
 # Resikno
 
-> A lightweight, transparent, and safe disk cleanup CLI tool for macOS
+> A lightweight, transparent, and safe disk cleanup CLI for macOS
 
-## Features
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-- **Transparency**: Always shows what will be deleted before acting
-- **Safety**: Creates restore points before every cleanup
-- **Simplicity**: CLI-first with beautiful TUI, no bloat
-- **Cross-platform**: macOS first, Windows/Linux planned
+## Why Resikno?
+
+**Resikno** (from Esperanto *"resiknigi"* - to resign/let go) helps you let go of disk clutter safely.
+
+Unlike other cleanup tools, Resikno is:
+- **Transparent** - See exactly what will be deleted before any action
+- **Safe** - Creates restore points before every cleanup
+- **Fast** - Built in Rust with parallel scanning
+- **Simple** - CLI-first with a beautiful TUI, no bloat
 
 ## Installation
 
-### Homebrew (Recommended)
-
 ```bash
-brew install --formula https://raw.githubusercontent.com/esmondo/resikno-mac/main/Formula/resikno.rb
-```
-
-### Quick Install Script
-
-```bash
-curl -sSL https://raw.githubusercontent.com/esmondo/resikno-mac/main/install.sh | bash
-```
-
-### From Source
-
-```bash
-# Requires Rust (install from https://rustup.rs)
+# From source (requires Rust 1.75+)
 cargo install --git https://github.com/esmondo/resikno-mac.git
-```
 
-### Manual Build
-
-```bash
+# Or clone and build
 git clone https://github.com/esmondo/resikno-mac.git
 cd resikno-mac
 cargo install --path .
 ```
 
-After installation, verify it works:
-
-```bash
-resikno --help
-```
-
 ## Usage
 
 ```bash
-# Scan your system for cleanable files
+# Scan and open interactive TUI
 resikno scan
 
-# Clean specific category (dry-run by default)
-resikno clean caches
+# Scan with custom minimum file size (default: 50MB)
+resikno scan --min-size 100    # Only show files >= 100MB
+resikno scan -m 10             # Show files >= 10MB
 
-# Actually delete files (requires --execute flag)
-resikno clean caches --execute
+# Non-interactive scan (just show results)
+resikno scan --no-interactive
 
-# Interactive TUI mode
-resikno
+# Clean specific categories
+resikno clean caches           # Clean cache files
+resikno clean --safe-only      # Only clean SAFE items
+resikno clean --execute        # Actually delete (default is dry-run)
+
+# Analyze disk
+resikno analyze --large 500    # Find files > 500MB
+resikno analyze --duplicates   # Find duplicate files
+
+# Manage restore points
+resikno restore --list         # List restore points
+resikno restore --latest       # Restore most recent cleanup
+
+# Update to latest version
+resikno update
+resikno update --check         # Check without installing
 ```
 
-## Safety First
+## TUI Keyboard Shortcuts
 
-Resikno is designed to never delete anything important:
+| Key | Action |
+|-----|--------|
+| `↑↓` / `jk` | Navigate |
+| `Enter` | Expand/collapse category |
+| `Space` | Select/deselect item |
+| `A` | Select all |
+| `F` | Reveal in Finder |
+| `C` | Clean selected items |
+| `Q` / `Esc` | Quit |
 
-| Category | Safety Level | Action |
-|----------|--------------|--------|
-| System caches | SAFE | Auto-cleanable |
-| App caches | SAFE | Auto-cleanable |
-| Logs (>30 days) | MOSTLY SAFE | Review suggested |
-| Duplicates | REVIEW | Manual confirmation |
-| User files | CAUTION | Never auto-clean |
-| System files | PROTECTED | Never touch |
+## What It Scans
 
-### Protected Paths (Never Touched)
+| Category | Safety | Description |
+|----------|--------|-------------|
+| System Caches | SAFE | OS-level cache files |
+| App Caches | SAFE | Application cache data |
+| Temp Files | SAFE | Temporary files in /tmp, /var/tmp |
+| Logs | REVIEW | System and app logs |
+| iOS Backups | REVIEW | iPhone/iPad backups |
+| Xcode Data | REVIEW | DerivedData, device support |
+| Downloads | CAREFUL | Large files in ~/Downloads |
 
-- System directories: `/System`, `/usr`, `/bin`, `/sbin`
-- User data: `~/Documents`, `~/Desktop`, `~/Pictures`, `~/Music`
-- Credentials: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config`
-- Application data: `~/Library/Application Support`
+## Safety Features
 
-## Project Structure
+1. **Dry-run by default** - Use `--execute` to actually delete
+2. **Restore points** - Every cleanup creates a restore point
+3. **Protected paths** - Critical system files are never touched
+4. **Confirmation required** - Interactive confirmation for risky items
+
+## Screenshots
 
 ```
-src/
-├── main.rs             # Entry point, CLI setup
-├── cli/                # Command-line interface
-│   ├── commands.rs     # Command implementations
-│   └── args.rs         # Argument definitions (clap)
-├── scanner/            # Disk scanning engine
-│   ├── cache.rs        # Cache directory detection
-│   ├── duplicates.rs   # Duplicate file finder
-│   └── large_files.rs  # Large/old file detection
-├── cleaner/            # Cleanup operations
-│   ├── backup.rs       # Restore point creation
-│   └── delete.rs       # Safe deletion logic
-├── ui/                 # Terminal UI
-│   ├── tree.rs         # Interactive tree view
-│   ├── colors.rs       # Color scheme definitions
-│   └── charts.rs       # ASCII visualizations
-└── platform/           # Platform-specific code
-    ├── macos.rs        # macOS paths & APIs
-    ├── linux.rs        # Linux paths (future)
-    └── windows.rs      # Windows paths (future)
+┌─ Disk Cleaner ──────────────────────────────────────────────────────┐
+│ RESIKNO  Found 22.1 GB (18.8 GB recoverable) in 33 items           │
+├─────────────────────────────────────────────────────────────────────┤
+│ > [ ] ▶ 📦 System Caches     11.0 GB  SAFE     [████████████░░░]   │
+│   [ ] ▶ 📦 App Caches         4.8 GB  SAFE     [█████░░░░░░░░░░]   │
+│   [ ] ▶ 📋 Logs             502.9 MB  REVIEW   [█░░░░░░░░░░░░░░]   │
+│   [ ] ▶ 🗑️ Temp Files         2.3 GB  SAFE     [███░░░░░░░░░░░░]   │
+│   [ ] ▶ 📂 Downloads          3.3 GB  CAREFUL  [████░░░░░░░░░░░]   │
+├─────────────────────────────────────────────────────────────────────┤
+│ [↑↓] Nav  [Enter] Expand  [Space] Select  [A] All  [F] Finder  [Q] │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Development
+## Contributing
+
+Contributions welcome! Please read the contributing guidelines first.
 
 ```bash
-# Build
+# Development
 cargo build
-
-# Run tests
 cargo test
+cargo clippy -- -W clippy::all
 
-# Run with debug output
+# Run with debug logging
 RUST_LOG=debug cargo run -- scan
-
-# Build release
-cargo build --release
 ```
-
-## Data Locations
-
-```
-~/.resikno-mac/
-├── config.toml         # User configuration
-├── restore/            # Restore points
-│   └── YYYY-MM-DD_HHMMSS/
-│       ├── manifest.json
-│       └── metadata.json
-└── logs/
-    └── cleanup.log     # Audit trail
-```
-
-## Why "Resikno"?
-
-From Javanese: *resik* means "clean", *resikno* is the imperative form - "clean it up!" A fitting name for a disk cleanup tool.
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- Built with [Ratatui](https://github.com/ratatui-org/ratatui) for the TUI
+- Inspired by the need for a transparent, trustworthy disk cleaner
