@@ -63,55 +63,69 @@ fn to_ansi256(r: u8, g: u8, b: u8) -> u8 {
 
 /// Display the welcome banner
 pub fn display() {
+    use console::measure_text_width;
+
     let gray = Style::new().color256(243);
     let dim = Style::new().dim();
     let cyan = Style::new().cyan();
     let white = Style::new().white();
 
+    const BOX_WIDTH: usize = 58; // Interior width between │ characters
+
+    // Helper to print a row with proper padding
+    let print_row = |content: &str, content_width: usize| {
+        let padding = BOX_WIDTH.saturating_sub(content_width);
+        let pad_left = padding / 2;
+        let pad_right = padding - pad_left;
+        print!("    {}", gray.apply_to("│"));
+        print!("{:width$}", "", width = pad_left);
+        print!("{}", content);
+        print!("{:width$}", "", width = pad_right);
+        println!("{}", gray.apply_to("│"));
+    };
+
     // Top border
     println!();
     println!(
         "    {}",
-        gray.apply_to("╭──────────────────────────────────────────────────────────╮")
+        gray.apply_to(format!("╭{}╮", "─".repeat(BOX_WIDTH)))
     );
-    println!("    {}                                                          {}", gray.apply_to("│"), gray.apply_to("│"));
+
+    // Empty row
+    println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
 
     // Banner lines with gradient - centered
-    // Banner is 47 chars, box interior is 58, so (58-47)/2 = 5.5 → 5 left, 6 right
     for line in BANNER_LINES {
-        print!("    {}     ", gray.apply_to("│"));
+        let banner_width = measure_text_width(line);
+        let padding = BOX_WIDTH.saturating_sub(banner_width);
+        let pad_left = padding / 2;
+        let pad_right = padding - pad_left;
+
+        print!("    {}", gray.apply_to("│"));
+        print!("{:width$}", "", width = pad_left);
         print_gradient_inline(line);
-        println!("      {}", gray.apply_to("│"));
+        print!("{:width$}", "", width = pad_right);
+        println!("{}", gray.apply_to("│"));
     }
 
-    println!("    {}                                                          {}", gray.apply_to("│"), gray.apply_to("│"));
+    // Empty row
+    println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
 
-    // Tagline - center manually
+    // Tagline - centered
     let tagline = "Lightweight Disk Cleanup for macOS";
-    let tag_pad = (58 - tagline.len()) / 2;
-    let tag_pad_right = 58 - tag_pad - tagline.len();
-    print!("    {}", gray.apply_to("│"));
-    print!("{:width$}", "", width = tag_pad);
-    print!("{}", dim.apply_to(tagline));
-    print!("{:width$}", "", width = tag_pad_right);
-    println!("{}", gray.apply_to("│"));
+    print_row(&dim.apply_to(tagline).to_string(), tagline.len());
 
-    // Version - center manually
+    // Version - centered
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let ver_pad = (58 - version.len()) / 2;
-    let ver_pad_right = 58 - ver_pad - version.len();
-    print!("    {}", gray.apply_to("│"));
-    print!("{:width$}", "", width = ver_pad);
-    print!("{}", dim.apply_to(&version));
-    print!("{:width$}", "", width = ver_pad_right);
-    println!("{}", gray.apply_to("│"));
+    print_row(&dim.apply_to(&version).to_string(), version.len());
 
-    println!("    {}                                                          {}", gray.apply_to("│"), gray.apply_to("│"));
+    // Empty row
+    println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
 
     // Bottom border
     println!(
         "    {}",
-        gray.apply_to("╰──────────────────────────────────────────────────────────╯")
+        gray.apply_to(format!("╰{}╯", "─".repeat(BOX_WIDTH)))
     );
     println!();
 

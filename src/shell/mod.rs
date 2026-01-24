@@ -105,6 +105,7 @@ impl Shell {
             "restore" => self.cmd_restore(&args[1..]),
             "review" => self.cmd_review(),
             "status" => self.cmd_status(),
+            "update" => self.cmd_update(&args[1..]),
             cmd => {
                 let red = Style::new().red();
                 let cyan = Style::new().cyan();
@@ -155,6 +156,11 @@ impl Shell {
             "    {}  {}",
             cyan.apply_to("status"),
             gray.apply_to("Show last scan summary")
+        );
+        println!(
+            "    {}  {}",
+            cyan.apply_to("update"),
+            gray.apply_to("Check for updates")
         );
         println!(
             "    {}    {}",
@@ -440,6 +446,100 @@ impl Shell {
         }
     }
 
+    /// Update command - check GitHub for new version and update if available
+    fn cmd_update(&self, args: &[String]) {
+        use std::io::{self, Write};
+        use std::process::Command;
+
+        let check_only = args.iter().any(|a| a == "--check" || a == "-c");
+        let force = args.iter().any(|a| a == "--force" || a == "-f");
+
+        let cyan = Style::new().cyan();
+        let green = Style::new().green();
+        let yellow = Style::new().yellow();
+        let dim = Style::new().dim();
+
+        let current_version = env!("CARGO_PKG_VERSION");
+        println!();
+        println!("{}  Checking for updates...", cyan.apply_to("🔄"));
+        println!("   Current version: {}", cyan.apply_to(format!("v{}", current_version)));
+
+        // Fetch latest version from GitHub
+        let latest_version = match fetch_latest_version() {
+            Ok(v) => v,
+            Err(e) => {
+                println!("   {} Could not check for updates: {}", yellow.apply_to("⚠️"), e);
+                println!("   Check manually at: https://github.com/esmondo/resikno-mac/releases");
+                return;
+            }
+        };
+
+        println!("   Latest version:  {}", cyan.apply_to(format!("v{}", latest_version)));
+
+        // Compare versions
+        let needs_update = version_compare(&current_version, &latest_version) == std::cmp::Ordering::Less;
+
+        if !needs_update {
+            println!();
+            println!("{}  You're up to date!", green.apply_to("✅"));
+            return;
+        }
+
+        println!();
+        println!("{}  New version available: {} → {}",
+            yellow.apply_to("📦"),
+            dim.apply_to(format!("v{}", current_version)),
+            green.apply_to(format!("v{}", latest_version))
+        );
+
+        if check_only {
+            println!();
+            println!("   Run '{}' to update.", cyan.apply_to("update"));
+            return;
+        }
+
+        // Prompt for confirmation unless --force
+        if !force {
+            print!("\n   Update now? [y/N] ");
+            io::stdout().flush().ok();
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_err() {
+                return;
+            }
+
+            if !input.trim().eq_ignore_ascii_case("y") {
+                println!("   Update cancelled.");
+                return;
+            }
+        }
+
+        println!();
+        println!("{}  Updating resikno...", cyan.apply_to("📥"));
+
+        let status = Command::new("cargo")
+            .args(["install", "--git", "https://github.com/esmondo/resikno-mac.git", "--force"])
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                println!();
+                println!("{}  Updated successfully to v{}!", green.apply_to("✅"), latest_version);
+                println!("   Restart resikno to use the new version.");
+            }
+            Ok(_) => {
+                println!();
+                println!("{}  Update failed.", yellow.apply_to("❌"));
+                println!("   Try manually: cargo install --git https://github.com/esmondo/resikno-mac.git --force");
+            }
+            Err(e) => {
+                println!();
+                println!("{}  Could not run cargo: {}", yellow.apply_to("❌"), e);
+                println!("   Make sure Rust/Cargo is installed.");
+            }
+        }
+    }
+
     /// Parse --min-size argument (default: 0 = no minimum)
     fn parse_min_size(&self, args: &[String]) -> u64 {
         args.iter()
@@ -489,4 +589,64 @@ impl Shell {
             }
         }
     }
+}
+
+/// Fetch the latest version from GitHub
+fn fetch_latest_version() -> Result<String, String> {
+    use std::process::Command;
+
+    // Use curl to fetch the raw Cargo.toml from GitHub
+    let output = Command::new("curl")
+        .args([
+            "-sL",
+            "--max-time", "10",
+            "https://raw.githubusercontent.com/esmondo/resikno-mac/main/Cargo.toml"
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run curl: {}", e))?;
+
+    if !output.status.success() {
+        return Err("Failed to fetch from GitHub".to_string());
+    }
+
+    let content = String::from_utf8_lossy(&output.stdout);
+
+    // Parse version from Cargo.toml
+    for line in content.lines() {
+        if line.starts_with("version") {
+            // Extract version from: version = "0.1.0"
+            if let Some(start) = line.find('"') {
+                if let Some(end) = line.rfind('"') {
+                    if start < end {
+                        return Ok(line[start + 1..end].to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Err("Could not parse version from Cargo.toml".to_string())
+}
+
+/// Compare two semver version strings
+/// Returns Ordering::Less if v1 < v2, Equal if same, Greater if v1 > v2
+fn version_compare(v1: &str, v2: &str) -> std::cmp::Ordering {
+    let parse = |v: &str| -> Vec<u32> {
+        v.split('.')
+            .filter_map(|s| s.parse().ok())
+            .collect()
+    };
+
+    let parts1 = parse(v1);
+    let parts2 = parse(v2);
+
+    for i in 0..3 {
+        let p1 = parts1.get(i).copied().unwrap_or(0);
+        let p2 = parts2.get(i).copied().unwrap_or(0);
+        match p1.cmp(&p2) {
+            std::cmp::Ordering::Equal => continue,
+            other => return other,
+        }
+    }
+    std::cmp::Ordering::Equal
 }
