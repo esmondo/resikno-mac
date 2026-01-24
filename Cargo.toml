@@ -2,6 +2,7 @@
 name = "resikno-mac"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
 description = "A lightweight, transparent, and safe disk cleanup CLI tool"
 license = "MIT"
 repository = "https://github.com/esmondo/resikno-mac"
@@ -32,7 +33,7 @@ console = "0.15"
 tabled = "0.15"
 
 # Async & Performance
-rayon = "1.10"  # Pinned for rustc 1.79 compatibility
+rayon = ">=1.8, <1.11"  # Pinned for rustc 1.79 compatibility
 tokio = { version = "1", features = ["full"] }
 
 # Serialization

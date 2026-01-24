@@ -11,6 +11,8 @@ pub mod large_files;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use bytesize::ByteSize;
+use anyhow::Result;
+use crate::platform::PlatformPaths;
 
 // ============================================================================
 // PROTECTED PATHS - NEVER DELETE THESE
@@ -213,4 +215,47 @@ impl ScanResults {
     pub fn human_recoverable(&self) -> String {
         ByteSize(self.total_recoverable).to_string()
     }
+}
+
+/// Run a full system scan for cleanable files
+pub fn run_full_scan<P: PlatformPaths>(platform: &P, _custom_path: Option<&Path>) -> Result<ScanResults> {
+    let mut results = ScanResults::default();
+
+    // Scan system caches
+    let caches = cache::scan_caches(platform)?;
+    for (path, size) in caches {
+        results.items.push(ScannedItem {
+            path,
+            size,
+            category: CleanupCategory::SystemCaches,
+            last_accessed: None,
+            last_modified: None,
+        });
+    }
+
+    // Scan large files (>100MB) in Downloads
+    if let Some(downloads) = platform.downloads_dir() {
+        if downloads.exists() {
+            let large = large_files::find_large_files(&[downloads], 100 * 1024 * 1024)?;
+            for file in large {
+                results.items.push(ScannedItem {
+                    path: file.path,
+                    size: file.size,
+                    category: CleanupCategory::Downloads,
+                    last_accessed: file.last_accessed,
+                    last_modified: file.last_modified,
+                });
+            }
+        }
+    }
+
+    // Calculate totals
+    results.total_size = results.items.iter().map(|i| i.size).sum();
+    results.total_recoverable = results.items
+        .iter()
+        .filter(|i| matches!(i.category.safety_level(), SafetyLevel::Safe | SafetyLevel::MostlySafe))
+        .map(|i| i.size)
+        .sum();
+
+    Ok(results)
 }
