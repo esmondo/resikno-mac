@@ -63,70 +63,22 @@ fn to_ansi256(r: u8, g: u8, b: u8) -> u8 {
 
 /// Display the welcome banner
 pub fn display() {
-    let gray = Style::new().color256(243);
     let dim = Style::new().dim();
     let cyan = Style::new().cyan();
     let white = Style::new().white();
 
-    const BOX_WIDTH: usize = 58; // Interior width between │ characters
-
-    // Helper to print a row with proper padding
-    let print_row = |content: &str, content_width: usize| {
-        let padding = BOX_WIDTH.saturating_sub(content_width);
-        let pad_left = padding / 2;
-        let pad_right = padding - pad_left;
-        print!("    {}", gray.apply_to("│"));
-        print!("{:width$}", "", width = pad_left);
-        print!("{}", content);
-        print!("{:width$}", "", width = pad_right);
-        println!("{}", gray.apply_to("│"));
-    };
-
-    // Top border
+    // Banner lines with gradient
     println!();
-    println!(
-        "    {}",
-        gray.apply_to(format!("╭{}╮", "─".repeat(BOX_WIDTH)))
-    );
-
-    // Empty row
-    println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
-
-    // Banner lines with gradient - centered
-    // Banner is exactly 47 characters wide (manually verified)
-    const BANNER_WIDTH: usize = 47;
-    let padding = BOX_WIDTH.saturating_sub(BANNER_WIDTH);
-    let pad_left = padding / 2;
-    let pad_right = padding - pad_left;
-
     for line in BANNER_LINES {
-        print!("    {}", gray.apply_to("│"));
-        print!("{:width$}", "", width = pad_left);
+        print!("  ");
         print_gradient_inline(line);
-        print!("{:width$}", "", width = pad_right);
-        println!("{}", gray.apply_to("│"));
+        println!();
     }
 
-    // Empty row
-    println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
-
-    // Tagline - centered
-    let tagline = "Lightweight Disk Cleanup for macOS";
-    print_row(&dim.apply_to(tagline).to_string(), tagline.len());
-
-    // Version - centered
-    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    print_row(&dim.apply_to(&version).to_string(), version.len());
-
-    // Empty row
-    println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
-
-    // Bottom border
-    println!(
-        "    {}",
-        gray.apply_to(format!("╰{}╯", "─".repeat(BOX_WIDTH)))
-    );
+    // Tagline and version
     println!();
+    println!("  {}", dim.apply_to("Lightweight Disk Cleanup for macOS"));
+    println!("  {}", dim.apply_to(format!("v{}", env!("CARGO_PKG_VERSION"))));
 
     // Tips section
     println!("  {}:", white.apply_to("Tips"));
