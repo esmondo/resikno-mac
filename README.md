@@ -7,7 +7,7 @@
 
 ## Why Resikno?
 
-**Resikno** (from Esperanto *"resiknigi"* - to resign/let go) helps you let go of disk clutter safely.
+**Resikno** (from Javanese *"resik"* - clean) helps you clean up disk clutter safely.
 
 Unlike other cleanup tools, Resikno is:
 - **Interactive** - Persistent shell experience (like `python` or `node`)

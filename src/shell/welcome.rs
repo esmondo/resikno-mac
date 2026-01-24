@@ -63,8 +63,6 @@ fn to_ansi256(r: u8, g: u8, b: u8) -> u8 {
 
 /// Display the welcome banner
 pub fn display() {
-    use console::measure_text_width;
-
     let gray = Style::new().color256(243);
     let dim = Style::new().dim();
     let cyan = Style::new().cyan();
@@ -95,12 +93,13 @@ pub fn display() {
     println!("    {}{:width$}{}", gray.apply_to("│"), "", gray.apply_to("│"), width = BOX_WIDTH);
 
     // Banner lines with gradient - centered
-    for line in BANNER_LINES {
-        let banner_width = measure_text_width(line);
-        let padding = BOX_WIDTH.saturating_sub(banner_width);
-        let pad_left = padding / 2;
-        let pad_right = padding - pad_left;
+    // Banner is exactly 47 characters wide (manually verified)
+    const BANNER_WIDTH: usize = 47;
+    let padding = BOX_WIDTH.saturating_sub(BANNER_WIDTH);
+    let pad_left = padding / 2;
+    let pad_right = padding - pad_left;
 
+    for line in BANNER_LINES {
         print!("    {}", gray.apply_to("│"));
         print!("{:width$}", "", width = pad_left);
         print_gradient_inline(line);
