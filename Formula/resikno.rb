@@ -1,5 +1,5 @@
 class Resikno < Formula
-  desc "A lightweight, transparent, and safe disk cleanup CLI tool for macOS"
+  desc "Lightweight, transparent, and safe disk cleanup CLI for macOS (resikno = 'clean it!' in Javanese)"
   homepage "https://github.com/esmondo/resikno-mac"
   url "https://github.com/esmondo/resikno-mac/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "REPLACE_WITH_ACTUAL_SHA256_AFTER_RELEASE"

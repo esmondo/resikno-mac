@@ -14,8 +14,7 @@
 ### Homebrew (Recommended)
 
 ```bash
-brew tap esmondo/resikno
-brew install resikno
+brew install --formula https://raw.githubusercontent.com/esmondo/resikno-mac/main/Formula/resikno.rb
 ```
 
 ### Quick Install Script
@@ -137,7 +136,7 @@ cargo build --release
 
 ## Why "Resikno"?
 
-"Resikno" comes from Esperanto, meaning "recycling" - fitting for a tool that helps you clean up and recycle disk space.
+From Javanese: *resik* means "clean", *resikno* is the imperative form - "clean it up!" A fitting name for a disk cleanup tool.
 
 ## License
 
