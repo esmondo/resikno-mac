@@ -11,15 +11,37 @@
 
 ## Installation
 
+### Homebrew (Recommended)
+
 ```bash
-# Clone the repository
+brew tap esmondo/resikno
+brew install resikno
+```
+
+### Quick Install Script
+
+```bash
+curl -sSL https://raw.githubusercontent.com/esmondo/resikno-mac/main/install.sh | bash
+```
+
+### From Source
+
+```bash
+# Requires Rust (install from https://rustup.rs)
+cargo install --git https://github.com/esmondo/resikno-mac.git
+```
+
+### Manual Build
+
+```bash
 git clone https://github.com/esmondo/resikno-mac.git
 cd resikno-mac
-
-# Install the binary
 cargo install --path .
+```
 
-# Now use it
+After installation, verify it works:
+
+```bash
 resikno --help
 ```
 
