@@ -34,34 +34,31 @@ After installation, run `resikno` from any directory to launch.
 
 ### Interactive Shell (Recommended)
 
-```bash
+```
 $ resikno
 
-    ╭──────────────────────────────────────────────────────────╮
-    │                                                          │
-    │     ░█▀▀█ ░█▀▀▀ ░█▀▀▀█ ▀█▀ ░█─▄▀ ░█▄─░█ ░█▀▀▀█      │
-    │     ░█▄▄▀ ░█▀▀▀ ─▀▀▀▄▄ ░█─ ░█▀▄─ ░█░█░█ ░█──░█      │
-    │     ░█─░█ ░█▄▄▄ ░█▄▄▄█ ▄█▄ ░█─░█ ░█──▀█ ░█▄▄▄█      │
-    │                                                          │
-    │            Lightweight Disk Cleanup for macOS            │
-    │                          v0.2.0                          │
-    │                                                          │
-    ╰──────────────────────────────────────────────────────────╯
+  ____  _____ ____ ___ _  ___   _  ___
+ |  _ \| ____/ ___|_ _| |/ / \ | |/ _ \
+ | |_) |  _| \___ \| || ' /|  \| | | | |
+ |  _ <| |___ ___) | || . \| |\  | |_| |
+ |_| \_\_____|____/___|_|\_\_| \_|\___/
 
-  Tips:
-  1. Type 'scan' to find cleanable files
-  2. Type 'help' for all commands
-  3. Press Ctrl+D or type 'exit' to quit
+ Lightweight Disk Cleanup for macOS v0.2.0
 
-resikno ❯ scan                  # Scan and open TUI
-resikno ❯ review                # Re-open TUI with last scan
-resikno ❯ status                # Show scan summary
-resikno ❯ clean caches          # Dry-run clean caches
-resikno ❯ clean --execute       # Actually delete files
-resikno ❯ restore --list        # List restore points
-resikno ❯ update                # Check for updates
-resikno ❯ version bump minor    # Bump version to 0.3.0
-resikno ❯ exit                  # Exit shell
+Tips:
+1. Type 'scan' to find cleanable files
+2. Type 'help' for all commands
+3. Press Ctrl+D or type 'exit' to quit
+
+resikno > scan                  # Scan and open TUI
+resikno > review                # Re-open TUI with last scan
+resikno > status                # Show scan summary
+resikno > clean caches          # Dry-run clean caches
+resikno > clean --execute       # Actually delete files
+resikno > restore --list        # List restore points
+resikno > update                # Check for updates
+resikno > version bump minor    # Bump version to 0.3.0
+resikno > exit                  # Exit shell
 ```
 
 ### Shell Commands
