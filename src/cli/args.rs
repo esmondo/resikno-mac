@@ -31,6 +31,10 @@ pub enum Commands {
         /// Skip interactive mode, just show results
         #[arg(long)]
         no_interactive: bool,
+
+        /// Minimum file size in MB for Downloads/Large Files (default: 50)
+        #[arg(long, short = 'm', default_value = "50")]
+        min_size: u64,
     },
 
     /// Clean specified categories
@@ -84,5 +88,12 @@ pub enum Commands {
 
         /// Value to set
         value: Option<String>,
+    },
+
+    /// Update resikno to the latest version
+    Update {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
     },
 }

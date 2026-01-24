@@ -218,10 +218,20 @@ impl ScanResults {
 }
 
 /// Run a full system scan for cleanable files
-pub fn run_full_scan<P: PlatformPaths>(platform: &P, _custom_path: Option<&Path>) -> Result<ScanResults> {
+///
+/// # Arguments
+/// * `platform` - Platform-specific path provider
+/// * `_custom_path` - Optional custom path to scan (not yet implemented)
+/// * `min_size_mb` - Minimum file size in MB for Downloads/LargeFiles (default 50)
+pub fn run_full_scan<P: PlatformPaths>(
+    platform: &P,
+    _custom_path: Option<&Path>,
+    min_size_mb: u64,
+) -> Result<ScanResults> {
     let mut results = ScanResults::default();
+    let min_bytes = min_size_mb * 1024 * 1024;
 
-    // Scan system caches
+    // 1. System Caches
     let caches = cache::scan_caches(platform)?;
     for (path, size) in caches {
         results.items.push(ScannedItem {
@@ -233,10 +243,95 @@ pub fn run_full_scan<P: PlatformPaths>(platform: &P, _custom_path: Option<&Path>
         });
     }
 
-    // Scan large files (>100MB) in Downloads
+    // 2. App Caches
+    for dir in platform.app_cache_dirs() {
+        if dir.exists() {
+            if let Ok(size) = calculate_dir_size(&dir) {
+                if size > 0 {
+                    results.items.push(ScannedItem {
+                        path: dir,
+                        size,
+                        category: CleanupCategory::AppCaches,
+                        last_accessed: None,
+                        last_modified: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 3. Logs
+    for dir in platform.log_dirs() {
+        if dir.exists() {
+            if let Ok(size) = calculate_dir_size(&dir) {
+                if size > 0 {
+                    results.items.push(ScannedItem {
+                        path: dir,
+                        size,
+                        category: CleanupCategory::Logs,
+                        last_accessed: None,
+                        last_modified: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 4. Temp Files
+    for dir in platform.temp_dirs() {
+        if dir.exists() {
+            if let Ok(size) = calculate_dir_size(&dir) {
+                if size > 0 {
+                    results.items.push(ScannedItem {
+                        path: dir,
+                        size,
+                        category: CleanupCategory::TempFiles,
+                        last_accessed: None,
+                        last_modified: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 5. iOS Backups
+    for dir in platform.mobile_backup_dirs() {
+        if dir.exists() {
+            if let Ok(size) = calculate_dir_size(&dir) {
+                if size > 0 {
+                    results.items.push(ScannedItem {
+                        path: dir,
+                        size,
+                        category: CleanupCategory::IOSBackups,
+                        last_accessed: None,
+                        last_modified: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 6. Xcode Data
+    for dir in platform.xcode_dirs() {
+        if dir.exists() {
+            if let Ok(size) = calculate_dir_size(&dir) {
+                if size > 0 {
+                    results.items.push(ScannedItem {
+                        path: dir,
+                        size,
+                        category: CleanupCategory::XcodeData,
+                        last_accessed: None,
+                        last_modified: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 7. Downloads - large files
     if let Some(downloads) = platform.downloads_dir() {
         if downloads.exists() {
-            let large = large_files::find_large_files(&[downloads], 100 * 1024 * 1024)?;
+            let large = large_files::find_large_files(&[downloads], min_bytes)?;
             for file in large {
                 results.items.push(ScannedItem {
                     path: file.path,
@@ -258,4 +353,23 @@ pub fn run_full_scan<P: PlatformPaths>(platform: &P, _custom_path: Option<&Path>
         .sum();
 
     Ok(results)
+}
+
+/// Calculate the total size of a directory
+fn calculate_dir_size(path: &Path) -> Result<u64> {
+    use walkdir::WalkDir;
+
+    let mut total = 0u64;
+    for entry in WalkDir::new(path)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_type().is_file() {
+            if let Ok(metadata) = entry.metadata() {
+                total += metadata.len();
+            }
+        }
+    }
+    Ok(total)
 }

@@ -37,6 +37,8 @@ pub struct CategoryView {
     pub selected: bool,
 }
 
+use std::path::PathBuf;
+
 impl App {
     pub fn new(results: ScanResults) -> Self {
         // Group items by category
@@ -117,6 +119,21 @@ impl App {
             }
         }
         None
+    }
+
+    /// Get the path of the currently selected row
+    pub fn selected_path(&self) -> Option<PathBuf> {
+        match self.row_info(self.selected_index)? {
+            RowInfo::Category(cat_idx) => {
+                // For category, return the first item's path (usually a directory)
+                let cat = self.categories.get(cat_idx)?;
+                let first_idx = cat.item_indices.first()?;
+                Some(self.scan_results.items.get(*first_idx)?.path.clone())
+            }
+            RowInfo::Item { item_idx, .. } => {
+                Some(self.scan_results.items.get(item_idx)?.path.clone())
+            }
+        }
     }
 }
 
@@ -211,6 +228,16 @@ pub fn run_tui(results: ScanResults) -> Result<()> {
                         // Select all
                         let all_selected = app.selected_items.iter().all(|&s| s);
                         app.selected_items.iter_mut().for_each(|s| *s = !all_selected);
+                    }
+
+                    KeyCode::Char('f') => {
+                        // Reveal in Finder
+                        if let Some(path) = app.selected_path() {
+                            let _ = std::process::Command::new("open")
+                                .arg("-R")  // Reveal in Finder
+                                .arg(&path)
+                                .spawn();
+                        }
                     }
 
                     _ => {}

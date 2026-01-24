@@ -9,7 +9,7 @@ use ratatui::{
 };
 use bytesize::ByteSize;
 
-use super::{App, RowInfo, colors::ColorScheme};
+use super::{App, colors::ColorScheme};
 
 /// Render the main tree view
 pub fn render(frame: &mut Frame, app: &App) {
@@ -107,6 +107,15 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme
         let percent = (cat.total_size as f64 / max_size as f64 * 100.0) as u8;
         let bar = super::colors::progress_bar(percent as f64, 15);
 
+        // Bar color matches safety level, NOT size
+        let bar_color = match safety {
+            crate::scanner::SafetyLevel::Safe => Color::Blue,
+            crate::scanner::SafetyLevel::MostlySafe => Color::Green,
+            crate::scanner::SafetyLevel::ReviewCarefully => Color::Yellow,
+            crate::scanner::SafetyLevel::Caution => Color::Red,
+            crate::scanner::SafetyLevel::Protected => Color::White,
+        };
+
         let style = if is_selected {
             colors.selected
         } else {
@@ -129,7 +138,7 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme
                 crate::scanner::SafetyLevel::Caution => Style::default().fg(Color::Red),
                 crate::scanner::SafetyLevel::Protected => Style::default().fg(Color::White),
             }),
-            Span::styled(bar, Style::default().fg(colors.for_percentage(percent as f64))),
+            Span::styled(bar, Style::default().fg(bar_color)),
         ])).style(style));
 
         current_row += 1;
@@ -182,13 +191,15 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme
 fn render_footer(frame: &mut Frame, area: Rect, colors: &ColorScheme) {
     let footer = Paragraph::new(Line::from(vec![
         Span::styled("[↑↓]", colors.header),
-        Span::raw(" Navigate  "),
+        Span::raw(" Nav  "),
         Span::styled("[Enter]", colors.header),
         Span::raw(" Expand  "),
         Span::styled("[Space]", colors.header),
         Span::raw(" Select  "),
         Span::styled("[A]", colors.header),
         Span::raw(" All  "),
+        Span::styled("[F]", colors.header),
+        Span::raw(" Finder  "),
         Span::styled("[C]", colors.header),
         Span::raw(" Clean  "),
         Span::styled("[Q]", colors.header),

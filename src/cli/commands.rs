@@ -12,17 +12,17 @@ use crate::ui;
 /// Execute the CLI command
 pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
-        Commands::Scan { path, no_interactive } => {
+        Commands::Scan { path, no_interactive, min_size } => {
             let platform = platform::current();
 
             // Run the scan
-            println!("Scanning system for cleanable files...\n");
+            println!("Scanning system for cleanable files (min size: {} MB)...\n", min_size);
             let scan_path = if path.to_string_lossy() == "~" {
                 None
             } else {
                 Some(path.as_path())
             };
-            let results = scanner::run_full_scan(&platform, scan_path)?;
+            let results = scanner::run_full_scan(&platform, scan_path, min_size)?;
 
             // Display results (text mode for now)
             display_scan_results(&results);
@@ -37,7 +37,7 @@ pub fn execute(cli: Cli) -> Result<()> {
 
             // Run scan to find cleanable items
             println!("Scanning for {} items...\n", category);
-            let results = scanner::run_full_scan(&platform, None)?;
+            let results = scanner::run_full_scan(&platform, None, 50)?;  // Default 50MB threshold
 
             // Filter by category if specified
             let items_to_clean: Vec<_> = results.items.iter()
@@ -209,6 +209,38 @@ pub fn execute(cli: Cli) -> Result<()> {
                 _ => println!("Opening config..."),
             }
             // TODO: Implement config
+        }
+        Commands::Update { check } => {
+            println!("🔄 Checking for updates...\n");
+
+            let current_version = env!("CARGO_PKG_VERSION");
+            println!("Current version: {}", current_version);
+
+            if check {
+                println!("\nTo update, run: resikno update");
+                println!("Or manually: cargo install --git https://github.com/esmondo/resikno-mac.git --force");
+            } else {
+                println!("\n📥 Updating resikno...");
+
+                let status = std::process::Command::new("cargo")
+                    .args(["install", "--git", "https://github.com/esmondo/resikno-mac.git", "--force"])
+                    .status();
+
+                match status {
+                    Ok(s) if s.success() => {
+                        println!("\n✅ Updated successfully!");
+                        println!("   Run 'resikno --version' to confirm.");
+                    }
+                    Ok(_) => {
+                        println!("\n❌ Update failed.");
+                        println!("   Try manually: cargo install --git https://github.com/esmondo/resikno-mac.git --force");
+                    }
+                    Err(e) => {
+                        println!("\n❌ Could not run cargo: {}", e);
+                        println!("   Make sure Rust/Cargo is installed.");
+                    }
+                }
+            }
         }
     }
     Ok(())

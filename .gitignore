@@ -1,1 +1,7 @@
 /target
+
+# Sensitive documentation (PRD, plans)
+/docs/plans/
+
+# Local Claude settings
+.claude/settings.local.json
