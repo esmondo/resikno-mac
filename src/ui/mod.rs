@@ -410,8 +410,18 @@ pub fn run_tui(results: ScanResults) -> Result<()> {
     Ok(())
 }
 
+/// Print a row in a box with proper alignment
+/// Uses console::measure_text_width for proper Unicode/emoji width handling
+fn print_box_row(content: &str, width: usize) {
+    use console::measure_text_width;
+    let content_len = measure_text_width(content);
+    let padding = width.saturating_sub(content_len);
+    println!("│ {}{} │", content, " ".repeat(padding));
+}
+
 /// Handle cleanup after TUI exit
 fn handle_cleanup(paths: &[PathBuf], total_size: u64) -> Result<()> {
+    const BOX_WIDTH: usize = 45; // Inner content width
 
     if paths.is_empty() {
         return Ok(());
@@ -419,12 +429,12 @@ fn handle_cleanup(paths: &[PathBuf], total_size: u64) -> Result<()> {
 
     // Show confirmation prompt
     println!();
-    println!("┌─────────────────────────────────────────────────┐");
-    println!("│  🧹 Cleanup Confirmation                         │");
-    println!("├─────────────────────────────────────────────────┤");
-    println!("│  Items:  {} files/folders", paths.len());
-    println!("│  Size:   {}", ByteSize(total_size));
-    println!("└─────────────────────────────────────────────────┘");
+    println!("┌─{}─┐", "─".repeat(BOX_WIDTH));
+    print_box_row("🧹 Cleanup Confirmation", BOX_WIDTH);
+    println!("├─{}─┤", "─".repeat(BOX_WIDTH));
+    print_box_row(&format!("Items:  {} files/folders", paths.len()), BOX_WIDTH);
+    print_box_row(&format!("Size:   {}", ByteSize(total_size)), BOX_WIDTH);
+    println!("└─{}─┘", "─".repeat(BOX_WIDTH));
     println!();
     println!("A restore point will be created before deletion.");
     print!("Proceed with cleanup? [y/N] ");
@@ -449,24 +459,65 @@ fn handle_cleanup(paths: &[PathBuf], total_size: u64) -> Result<()> {
         force: false,
     };
 
-    match cleaner::cleanup(&paths, &options) {
+    match cleaner::cleanup(paths, &options) {
         Ok(result) => {
-            println!();
-            println!("┌─────────────────────────────────────────────────┐");
-            println!("│  ✅ Cleanup Complete                             │");
-            println!("├─────────────────────────────────────────────────┤");
-            println!("│  Deleted: {} items", result.items_deleted);
-            println!("│  Freed:   {}", ByteSize(result.bytes_freed));
-            if let Some(restore) = &result.restore_point {
-                println!("│  Restore: {}", restore.id);
+            // Verify files were actually deleted
+            let mut actually_deleted: Vec<&PathBuf> = Vec::new();
+            let mut still_exists: Vec<&PathBuf> = Vec::new();
+            for path in paths {
+                if path.exists() {
+                    still_exists.push(path);
+                } else {
+                    actually_deleted.push(path);
+                }
             }
-            println!("└─────────────────────────────────────────────────┘");
+
+            println!();
+            println!("┌─{}─┐", "─".repeat(BOX_WIDTH));
+            print_box_row("✅ Cleanup Complete", BOX_WIDTH);
+            println!("├─{}─┤", "─".repeat(BOX_WIDTH));
+            print_box_row(&format!("Deleted: {} items", result.items_deleted), BOX_WIDTH);
+            print_box_row(&format!("Freed:   {}", ByteSize(result.bytes_freed)), BOX_WIDTH);
+            if let Some(restore) = &result.restore_point {
+                print_box_row(&format!("Restore: {}", restore.id), BOX_WIDTH);
+            }
+            println!("└─{}─┘", "─".repeat(BOX_WIDTH));
+
+            // Show deleted filenames
+            if !actually_deleted.is_empty() {
+                println!();
+                println!("Deleted files:");
+                for path in actually_deleted.iter().take(10) {
+                    let filename = path.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path.display().to_string());
+                    println!("  ✓ {}", filename);
+                }
+                if actually_deleted.len() > 10 {
+                    println!("  ... and {} more", actually_deleted.len() - 10);
+                }
+            }
+
+            // Warn about files that weren't deleted
+            if !still_exists.is_empty() {
+                println!();
+                println!("⚠️  {} files could not be verified as deleted:", still_exists.len());
+                for path in still_exists.iter().take(5) {
+                    let filename = path.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path.display().to_string());
+                    println!("   ✗ {}", filename);
+                }
+            }
 
             if !result.errors.is_empty() {
                 println!();
                 println!("⚠️  {} errors occurred:", result.errors.len());
                 for err in result.errors.iter().take(5) {
-                    println!("   {}: {}", err.path.display(), err.message);
+                    let filename = err.path.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| err.path.display().to_string());
+                    println!("   {}: {}", filename, err.message);
                 }
                 if result.errors.len() > 5 {
                     println!("   ... and {} more", result.errors.len() - 5);
