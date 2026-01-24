@@ -16,6 +16,7 @@ mod cli;
 mod cleaner;
 mod platform;
 mod scanner;
+mod shell;
 mod ui;
 
 use anyhow::Result;
@@ -32,13 +33,17 @@ fn main() {
 
 /// Main application logic
 fn run() -> Result<()> {
-    // Parse command line arguments
-    let cli = cli::Cli::parse();
+    let args: Vec<String> = std::env::args().collect();
 
-    // Execute the command
-    cli::commands::execute(cli)?;
-
-    Ok(())
+    if args.len() == 1 {
+        // No arguments: enter interactive shell mode
+        let mut shell = shell::Shell::new()?;
+        shell.run()
+    } else {
+        // With arguments: traditional subcommand mode (backwards compatible)
+        let cli = cli::Cli::parse();
+        cli::commands::execute(cli)
+    }
 }
 
 /// Print a user-friendly error message
