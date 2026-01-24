@@ -106,6 +106,7 @@ impl Shell {
             "review" => self.cmd_review(),
             "status" => self.cmd_status(),
             "update" => self.cmd_update(&args[1..]),
+            "version" => self.cmd_version(&args[1..]),
             cmd => {
                 let red = Style::new().red();
                 let cyan = Style::new().cyan();
@@ -161,6 +162,11 @@ impl Shell {
             "    {}  {}",
             cyan.apply_to("update"),
             gray.apply_to("Check for updates")
+        );
+        println!(
+            "    {} {}",
+            cyan.apply_to("version"),
+            gray.apply_to("Show/set version")
         );
         println!(
             "    {}    {}",
@@ -540,6 +546,89 @@ impl Shell {
         }
     }
 
+    /// Version command - show or set the version
+    fn cmd_version(&self, args: &[String]) {
+        let cyan = Style::new().cyan();
+        let green = Style::new().green();
+        let yellow = Style::new().yellow();
+        let dim = Style::new().dim();
+
+        let current_version = env!("CARGO_PKG_VERSION");
+
+        // No args - just show version
+        if args.is_empty() {
+            println!();
+            println!("   resikno {}", cyan.apply_to(format!("v{}", current_version)));
+            println!();
+            println!("   {}:", dim.apply_to("Usage"));
+            println!("   version set <version>     Set version (e.g., 0.2.0)");
+            println!("   version bump <part>       Bump major, minor, or patch");
+            return;
+        }
+
+        match args[0].as_str() {
+            "set" => {
+                if args.len() < 2 {
+                    println!("{}  Usage: version set <version>", yellow.apply_to("⚠️"));
+                    println!("   Example: version set 0.2.0");
+                    return;
+                }
+                let new_version = &args[1];
+                // Validate version format
+                if !is_valid_version(new_version) {
+                    println!("{}  Invalid version format: {}", yellow.apply_to("⚠️"), new_version);
+                    println!("   Expected format: X.Y.Z (e.g., 0.2.0)");
+                    return;
+                }
+                match set_cargo_version(new_version) {
+                    Ok(()) => {
+                        println!("{}  Version updated: {} → {}",
+                            green.apply_to("✅"),
+                            dim.apply_to(format!("v{}", current_version)),
+                            green.apply_to(format!("v{}", new_version))
+                        );
+                        println!("   Run '{}' to rebuild.", cyan.apply_to("cargo build"));
+                    }
+                    Err(e) => {
+                        println!("{}  Failed to update version: {}", yellow.apply_to("❌"), e);
+                    }
+                }
+            }
+            "bump" => {
+                if args.len() < 2 {
+                    println!("{}  Usage: version bump <major|minor|patch>", yellow.apply_to("⚠️"));
+                    return;
+                }
+                let part = args[1].to_lowercase();
+                let new_version = match bump_version(current_version, &part) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        println!("{}  {}", yellow.apply_to("⚠️"), e);
+                        return;
+                    }
+                };
+                match set_cargo_version(&new_version) {
+                    Ok(()) => {
+                        println!("{}  Version bumped ({}): {} → {}",
+                            green.apply_to("✅"),
+                            part,
+                            dim.apply_to(format!("v{}", current_version)),
+                            green.apply_to(format!("v{}", new_version))
+                        );
+                        println!("   Run '{}' to rebuild.", cyan.apply_to("cargo build"));
+                    }
+                    Err(e) => {
+                        println!("{}  Failed to update version: {}", yellow.apply_to("❌"), e);
+                    }
+                }
+            }
+            _ => {
+                println!("{}  Unknown subcommand: {}", yellow.apply_to("⚠️"), args[0]);
+                println!("   Use 'version set <version>' or 'version bump <part>'");
+            }
+        }
+    }
+
     /// Parse --min-size argument (default: 0 = no minimum)
     fn parse_min_size(&self, args: &[String]) -> u64 {
         args.iter()
@@ -649,4 +738,71 @@ fn version_compare(v1: &str, v2: &str) -> std::cmp::Ordering {
         }
     }
     std::cmp::Ordering::Equal
+}
+
+/// Validate version format (X.Y.Z)
+fn is_valid_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts.iter().all(|p| p.parse::<u32>().is_ok())
+}
+
+/// Bump a version component
+fn bump_version(current: &str, part: &str) -> Result<String, String> {
+    let parts: Vec<u32> = current
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+
+    if parts.len() != 3 {
+        return Err("Invalid current version format".to_string());
+    }
+
+    let (major, minor, patch) = (parts[0], parts[1], parts[2]);
+
+    match part {
+        "major" => Ok(format!("{}.0.0", major + 1)),
+        "minor" => Ok(format!("{}.{}.0", major, minor + 1)),
+        "patch" => Ok(format!("{}.{}.{}", major, minor, patch + 1)),
+        _ => Err(format!("Unknown version part: {}. Use major, minor, or patch.", part)),
+    }
+}
+
+/// Update version in Cargo.toml
+fn set_cargo_version(new_version: &str) -> Result<(), String> {
+    use std::fs;
+    use std::path::Path;
+
+    let cargo_path = Path::new("Cargo.toml");
+    if !cargo_path.exists() {
+        return Err("Cargo.toml not found in current directory".to_string());
+    }
+
+    let content = fs::read_to_string(cargo_path)
+        .map_err(|e| format!("Failed to read Cargo.toml: {}", e))?;
+
+    // Replace the version line
+    let mut new_content = String::new();
+    let mut found = false;
+
+    for line in content.lines() {
+        if line.starts_with("version") && line.contains('=') && !found {
+            new_content.push_str(&format!("version = \"{}\"", new_version));
+            found = true;
+        } else {
+            new_content.push_str(line);
+        }
+        new_content.push('\n');
+    }
+
+    if !found {
+        return Err("Could not find version line in Cargo.toml".to_string());
+    }
+
+    fs::write(cargo_path, new_content)
+        .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
+
+    Ok(())
 }
