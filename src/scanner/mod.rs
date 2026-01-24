@@ -217,13 +217,23 @@ impl ScanResults {
     }
 }
 
+/// Check if a size meets the filter criteria
+///
+/// Returns true if the size is within the specified min/max bounds.
+/// A value of 0 for min or max means no limit on that bound.
+fn meets_size_filter(size: u64, min_bytes: u64, max_bytes: u64) -> bool {
+    let meets_min = min_bytes == 0 || size >= min_bytes;
+    let meets_max = max_bytes == 0 || size <= max_bytes;
+    meets_min && meets_max
+}
+
 /// Run a full system scan for cleanable files
 ///
 /// # Arguments
 /// * `platform` - Platform-specific path provider
 /// * `_custom_path` - Optional custom path to scan (not yet implemented)
-/// * `min_size_mb` - Minimum file size in MB for Downloads/LargeFiles (0 = no minimum)
-/// * `max_size_mb` - Maximum file size in MB for Downloads/LargeFiles (0 = no maximum)
+/// * `min_size_mb` - Minimum file size in MB (0 = no minimum)
+/// * `max_size_mb` - Maximum file size in MB (0 = no maximum)
 pub fn run_full_scan<P: PlatformPaths>(
     platform: &P,
     _custom_path: Option<&Path>,
@@ -237,20 +247,22 @@ pub fn run_full_scan<P: PlatformPaths>(
     // 1. System Caches
     let caches = cache::scan_caches(platform)?;
     for (path, size) in caches {
-        results.items.push(ScannedItem {
-            path,
-            size,
-            category: CleanupCategory::SystemCaches,
-            last_accessed: None,
-            last_modified: None,
-        });
+        if meets_size_filter(size, min_bytes, max_bytes) {
+            results.items.push(ScannedItem {
+                path,
+                size,
+                category: CleanupCategory::SystemCaches,
+                last_accessed: None,
+                last_modified: None,
+            });
+        }
     }
 
     // 2. App Caches
     for dir in platform.app_cache_dirs() {
         if dir.exists() {
             if let Ok(size) = calculate_dir_size(&dir) {
-                if size > 0 {
+                if size > 0 && meets_size_filter(size, min_bytes, max_bytes) {
                     results.items.push(ScannedItem {
                         path: dir,
                         size,
@@ -267,7 +279,7 @@ pub fn run_full_scan<P: PlatformPaths>(
     for dir in platform.log_dirs() {
         if dir.exists() {
             if let Ok(size) = calculate_dir_size(&dir) {
-                if size > 0 {
+                if size > 0 && meets_size_filter(size, min_bytes, max_bytes) {
                     results.items.push(ScannedItem {
                         path: dir,
                         size,
@@ -284,7 +296,7 @@ pub fn run_full_scan<P: PlatformPaths>(
     for dir in platform.temp_dirs() {
         if dir.exists() {
             if let Ok(size) = calculate_dir_size(&dir) {
-                if size > 0 {
+                if size > 0 && meets_size_filter(size, min_bytes, max_bytes) {
                     results.items.push(ScannedItem {
                         path: dir,
                         size,
@@ -301,7 +313,7 @@ pub fn run_full_scan<P: PlatformPaths>(
     for dir in platform.mobile_backup_dirs() {
         if dir.exists() {
             if let Ok(size) = calculate_dir_size(&dir) {
-                if size > 0 {
+                if size > 0 && meets_size_filter(size, min_bytes, max_bytes) {
                     results.items.push(ScannedItem {
                         path: dir,
                         size,
@@ -318,7 +330,7 @@ pub fn run_full_scan<P: PlatformPaths>(
     for dir in platform.xcode_dirs() {
         if dir.exists() {
             if let Ok(size) = calculate_dir_size(&dir) {
-                if size > 0 {
+                if size > 0 && meets_size_filter(size, min_bytes, max_bytes) {
                     results.items.push(ScannedItem {
                         path: dir,
                         size,
@@ -434,4 +446,44 @@ pub fn scan_directory_children(path: &Path) -> Result<Vec<ChildEntry>> {
     children.sort_by(|a, b| b.size.cmp(&a.size));
 
     Ok(children)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_meets_size_filter_no_limits() {
+        // 0 means no limit
+        assert!(meets_size_filter(0, 0, 0));
+        assert!(meets_size_filter(100, 0, 0));
+        assert!(meets_size_filter(u64::MAX, 0, 0));
+    }
+
+    #[test]
+    fn test_meets_size_filter_min_only() {
+        let min = 100 * 1024 * 1024; // 100MB
+        assert!(!meets_size_filter(50 * 1024 * 1024, min, 0)); // 50MB < 100MB
+        assert!(meets_size_filter(100 * 1024 * 1024, min, 0)); // 100MB = 100MB
+        assert!(meets_size_filter(200 * 1024 * 1024, min, 0)); // 200MB > 100MB
+    }
+
+    #[test]
+    fn test_meets_size_filter_max_only() {
+        let max = 500 * 1024 * 1024; // 500MB
+        assert!(meets_size_filter(100 * 1024 * 1024, 0, max)); // 100MB < 500MB
+        assert!(meets_size_filter(500 * 1024 * 1024, 0, max)); // 500MB = 500MB
+        assert!(!meets_size_filter(600 * 1024 * 1024, 0, max)); // 600MB > 500MB
+    }
+
+    #[test]
+    fn test_meets_size_filter_min_and_max() {
+        let min = 100 * 1024 * 1024; // 100MB
+        let max = 500 * 1024 * 1024; // 500MB
+        assert!(!meets_size_filter(50 * 1024 * 1024, min, max));  // below min
+        assert!(meets_size_filter(100 * 1024 * 1024, min, max)); // at min
+        assert!(meets_size_filter(300 * 1024 * 1024, min, max)); // in range
+        assert!(meets_size_filter(500 * 1024 * 1024, min, max)); // at max
+        assert!(!meets_size_filter(600 * 1024 * 1024, min, max)); // above max
+    }
 }
