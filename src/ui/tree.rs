@@ -41,12 +41,11 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme)
     let total_size = ByteSize(app.scan_results.total_size);
     let recoverable = ByteSize(app.scan_results.total_recoverable);
 
-    let selected_count = app.selected_items.iter().filter(|&&s| s).count();
-    let selected_size: u64 = app.scan_results.items.iter()
-        .enumerate()
-        .filter(|(i, _)| app.selected_items.get(*i).copied().unwrap_or(false))
-        .map(|(_, item)| item.size)
-        .sum();
+    // Count selected items AND children
+    let selected_item_count = app.selected_items.iter().filter(|&&s| s).count();
+    let selected_child_count = app.selected_children.values().filter(|&&s| s).count();
+    let selected_count = selected_item_count + selected_child_count;
+    let selected_size = app.get_selected_size();
 
     let status = if selected_count > 0 {
         format!("{} selected ({}) | Total: {} in {} items",
@@ -148,6 +147,8 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme
             for &item_idx in &cat.item_indices {
                 let is_item_selected = app.selected_index == current_row;
                 let is_checked = app.selected_items.get(item_idx).copied().unwrap_or(false);
+                let is_item_expanded = app.is_item_expanded(item_idx);
+                let is_expandable = app.is_item_expandable(item_idx);
 
                 if let Some(item) = app.scan_results.items.get(item_idx) {
                     let item_checkbox = if is_checked { "[x]" } else { "[ ]" };
@@ -155,6 +156,13 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_else(|| item.path.display().to_string());
                     let item_size = format!("{:>10}", ByteSize(item.size));
+
+                    // Show expand indicator for directories
+                    let expand_indicator = if is_expandable {
+                        if is_item_expanded { "▼ " } else { "▶ " }
+                    } else {
+                        "  "
+                    };
 
                     let item_style = if is_item_selected {
                         colors.selected
@@ -165,12 +173,45 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App, colors: &ColorScheme
                     items.push(ListItem::new(Line::from(vec![
                         Span::raw(if is_item_selected { " >" } else { "  " }),
                         Span::raw(format!("     {} ", item_checkbox)),
-                        Span::raw("    "),  // Indent for hierarchy
-                        Span::styled(format!("{:<30}", truncate(&file_name, 30)), item_style),
+                        Span::raw(expand_indicator),
+                        Span::styled(format!("{:<28}", truncate(&file_name, 28)), item_style),
                         Span::styled(item_size, colors.for_size(item.size)),
                     ])).style(item_style));
 
                     current_row += 1;
+
+                    // Render children if item is expanded
+                    if is_item_expanded {
+                        if let Some(children) = app.expanded_items.get(&item_idx) {
+                            for child in children {
+                                let is_child_selected = app.selected_index == current_row;
+                                let is_child_checked = app.selected_children
+                                    .get(&child.path)
+                                    .copied()
+                                    .unwrap_or(false);
+
+                                let child_checkbox = if is_child_checked { "[x]" } else { "[ ]" };
+                                let child_size = format!("{:>10}", ByteSize(child.size));
+                                let child_indicator = if child.is_dir { "📁" } else { "📄" };
+
+                                let child_style = if is_child_selected {
+                                    colors.selected
+                                } else {
+                                    Style::default().fg(Color::Rgb(100, 100, 100))
+                                };
+
+                                items.push(ListItem::new(Line::from(vec![
+                                    Span::raw(if is_child_selected { " >" } else { "  " }),
+                                    Span::raw(format!("         {} ", child_checkbox)),
+                                    Span::raw(format!("{} ", child_indicator)),
+                                    Span::styled(format!("{:<24}", truncate(&child.name, 24)), child_style),
+                                    Span::styled(child_size, colors.for_size(child.size)),
+                                ])).style(child_style));
+
+                                current_row += 1;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -214,13 +255,15 @@ fn render_footer(frame: &mut Frame, area: Rect, colors: &ColorScheme) {
     frame.render_widget(footer, area);
 }
 
-/// Truncate a string to max length with ellipsis
+/// Truncate a string to max length with ellipsis (UTF-8 safe)
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    let char_count = s.chars().count();
+    if char_count <= max_len {
         s.to_string()
     } else if max_len > 3 {
-        format!("{}...", &s[..max_len - 3])
+        let truncated: String = s.chars().take(max_len - 3).collect();
+        format!("{}...", truncated)
     } else {
-        s[..max_len].to_string()
+        s.chars().take(max_len).collect()
     }
 }
