@@ -29,8 +29,7 @@ pub fn execute(cli: Cli) -> Result<()> {
 
             // Launch TUI if interactive mode
             if !no_interactive {
-                println!("\nLaunching interactive mode... (press 'q' to quit)\n");
-                ui::run_tui()?;
+                ui::run_tui(results)?;
             }
         }
         Commands::Clean { category, execute, safe_only } => {
