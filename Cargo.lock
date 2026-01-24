@@ -910,6 +910,7 @@ dependencies = [
  "predicates",
  "ratatui",
  "rayon",
+ "rayon-core",
  "serde",
  "serde_json",
  "sha2",
