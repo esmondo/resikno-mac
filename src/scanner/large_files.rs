@@ -5,8 +5,13 @@ use std::time::{Duration, SystemTime};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
-/// Find files larger than the specified size
-pub fn find_large_files(paths: &[PathBuf], min_size_bytes: u64) -> Result<Vec<LargeFile>> {
+/// Find files within the specified size range
+///
+/// # Arguments
+/// * `paths` - Directories to search
+/// * `min_size_bytes` - Minimum file size (0 = no minimum)
+/// * `max_size_bytes` - Maximum file size (0 = no maximum)
+pub fn find_large_files(paths: &[PathBuf], min_size_bytes: u64, max_size_bytes: u64) -> Result<Vec<LargeFile>> {
     let mut results = Vec::new();
 
     for path in paths {
@@ -16,7 +21,11 @@ pub fn find_large_files(paths: &[PathBuf], min_size_bytes: u64) -> Result<Vec<La
         {
             if entry.file_type().is_file() {
                 if let Ok(metadata) = entry.metadata() {
-                    if metadata.len() >= min_size_bytes {
+                    let size = metadata.len();
+                    let meets_min = min_size_bytes == 0 || size >= min_size_bytes;
+                    let meets_max = max_size_bytes == 0 || size <= max_size_bytes;
+
+                    if meets_min && meets_max {
                         let last_accessed = metadata
                             .accessed()
                             .ok()
@@ -28,7 +37,7 @@ pub fn find_large_files(paths: &[PathBuf], min_size_bytes: u64) -> Result<Vec<La
 
                         results.push(LargeFile {
                             path: entry.path().to_path_buf(),
-                            size: metadata.len(),
+                            size,
                             last_accessed,
                             last_modified,
                         });

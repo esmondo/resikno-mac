@@ -12,17 +12,23 @@ use crate::ui;
 /// Execute the CLI command
 pub fn execute(cli: Cli) -> Result<()> {
     match cli.command {
-        Commands::Scan { path, no_interactive, min_size } => {
+        Commands::Scan { path, no_interactive, min_size, max_size } => {
             let platform = platform::current();
 
             // Run the scan
-            println!("Scanning system for cleanable files (min size: {} MB)...\n", min_size);
+            let size_filter_msg = match (min_size, max_size) {
+                (0, 0) => "no size filter".to_string(),
+                (min, 0) => format!("min: {} MB", min),
+                (0, max) => format!("max: {} MB", max),
+                (min, max) => format!("{}-{} MB", min, max),
+            };
+            println!("Scanning system for cleanable files ({})...\n", size_filter_msg);
             let scan_path = if path.to_string_lossy() == "~" {
                 None
             } else {
                 Some(path.as_path())
             };
-            let results = scanner::run_full_scan(&platform, scan_path, min_size)?;
+            let results = scanner::run_full_scan(&platform, scan_path, min_size, max_size)?;
 
             // Display results (text mode for now)
             display_scan_results(&results);
@@ -37,7 +43,7 @@ pub fn execute(cli: Cli) -> Result<()> {
 
             // Run scan to find cleanable items
             println!("Scanning for {} items...\n", category);
-            let results = scanner::run_full_scan(&platform, None, 50)?;  // Default 50MB threshold
+            let results = scanner::run_full_scan(&platform, None, 0, 0)?;  // No size filter
 
             // Filter by category if specified
             let items_to_clean: Vec<_> = results.items.iter()
@@ -122,7 +128,7 @@ pub fn execute(cli: Cli) -> Result<()> {
                 println!("🔍 Scanning for files larger than {} MB...\n", min_mb);
 
                 if let Some(home) = analyze_platform.downloads_dir() {
-                    let large_files = scanner::large_files::find_large_files(&[home], min_bytes)?;
+                    let large_files = scanner::large_files::find_large_files(&[home], min_bytes, 0)?;
 
                     if large_files.is_empty() {
                         println!("No files found larger than {} MB", min_mb);

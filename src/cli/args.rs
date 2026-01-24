@@ -32,9 +32,13 @@ pub enum Commands {
         #[arg(long)]
         no_interactive: bool,
 
-        /// Minimum file size in MB for Downloads/Large Files (default: 50)
-        #[arg(long, short = 'm', default_value = "50")]
+        /// Minimum file size in MB for Downloads/Large Files (default: 0 = no minimum)
+        #[arg(long, short = 'm', default_value = "0")]
         min_size: u64,
+
+        /// Maximum file size in MB for Downloads/Large Files (default: 0 = no maximum)
+        #[arg(long, short = 'M', default_value = "0")]
+        max_size: u64,
     },
 
     /// Clean specified categories

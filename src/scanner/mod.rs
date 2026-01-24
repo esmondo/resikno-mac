@@ -200,7 +200,7 @@ impl ScannedItem {
 }
 
 /// Results from a scan operation
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ScanResults {
     pub items: Vec<ScannedItem>,
     pub total_size: u64,
@@ -222,14 +222,17 @@ impl ScanResults {
 /// # Arguments
 /// * `platform` - Platform-specific path provider
 /// * `_custom_path` - Optional custom path to scan (not yet implemented)
-/// * `min_size_mb` - Minimum file size in MB for Downloads/LargeFiles (default 50)
+/// * `min_size_mb` - Minimum file size in MB for Downloads/LargeFiles (0 = no minimum)
+/// * `max_size_mb` - Maximum file size in MB for Downloads/LargeFiles (0 = no maximum)
 pub fn run_full_scan<P: PlatformPaths>(
     platform: &P,
     _custom_path: Option<&Path>,
     min_size_mb: u64,
+    max_size_mb: u64,
 ) -> Result<ScanResults> {
     let mut results = ScanResults::default();
     let min_bytes = min_size_mb * 1024 * 1024;
+    let max_bytes = max_size_mb * 1024 * 1024;
 
     // 1. System Caches
     let caches = cache::scan_caches(platform)?;
@@ -331,7 +334,7 @@ pub fn run_full_scan<P: PlatformPaths>(
     // 7. Downloads - large files
     if let Some(downloads) = platform.downloads_dir() {
         if downloads.exists() {
-            let large = large_files::find_large_files(&[downloads], min_bytes)?;
+            let large = large_files::find_large_files(&[downloads], min_bytes, max_bytes)?;
             for file in large {
                 results.items.push(ScannedItem {
                     path: file.path,
@@ -372,4 +375,63 @@ fn calculate_dir_size(path: &Path) -> Result<u64> {
         }
     }
     Ok(total)
+}
+
+/// A child entry within a scanned item (for drill-down)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChildEntry {
+    pub path: PathBuf,
+    pub name: String,
+    pub size: u64,
+    pub is_dir: bool,
+}
+
+/// Scan immediate children of a directory for drill-down
+pub fn scan_directory_children(path: &Path) -> Result<Vec<ChildEntry>> {
+    let mut children = Vec::new();
+
+    if !path.is_dir() {
+        return Ok(children);
+    }
+
+    let entries = std::fs::read_dir(path)?;
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let entry_path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden files starting with . (except in specific directories)
+        if name.starts_with('.') && !name.starts_with("..") {
+            continue;
+        }
+
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        let is_dir = metadata.is_dir();
+        let size = if is_dir {
+            calculate_dir_size(&entry_path).unwrap_or(0)
+        } else {
+            metadata.len()
+        };
+
+        // Skip empty entries
+        if size == 0 {
+            continue;
+        }
+
+        children.push(ChildEntry {
+            path: entry_path,
+            name,
+            size,
+            is_dir,
+        });
+    }
+
+    // Sort by size descending
+    children.sort_by(|a, b| b.size.cmp(&a.size));
+
+    Ok(children)
 }

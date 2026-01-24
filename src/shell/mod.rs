@@ -173,16 +173,35 @@ impl Shell {
             gray.apply_to("caches, logs, temp, downloads, all")
         );
         println!();
+        println!("  {}:", white.apply_to("Scan options"));
+        println!(
+            "    {}  {}",
+            cyan.apply_to("-m, --min-size <MB>"),
+            gray.apply_to("Minimum file size (default: 0 = no min)")
+        );
+        println!(
+            "    {}  {}",
+            cyan.apply_to("-M, --max-size <MB>"),
+            gray.apply_to("Maximum file size (default: 0 = no max)")
+        );
+        println!();
     }
 
     /// Scan command
     fn cmd_scan(&mut self, args: &[String]) {
         let min_size = self.parse_min_size(args);
+        let max_size = self.parse_max_size(args);
         let platform = platform::current();
 
-        println!("Scanning system for cleanable files (min size: {} MB)...\n", min_size);
+        let size_filter_msg = match (min_size, max_size) {
+            (0, 0) => "no size filter".to_string(),
+            (min, 0) => format!("min: {} MB", min),
+            (0, max) => format!("max: {} MB", max),
+            (min, max) => format!("{}-{} MB", min, max),
+        };
+        println!("Scanning system for cleanable files ({})...\n", size_filter_msg);
 
-        match scanner::run_full_scan(&platform, None, min_size) {
+        match scanner::run_full_scan(&platform, None, min_size, max_size) {
             Ok(results) => {
                 self.display_scan_summary(&results);
                 self.last_scan = Some(results.clone());
@@ -234,7 +253,7 @@ impl Shell {
         if self.last_scan.is_none() {
             println!("Running scan first...\n");
             let platform = platform::current();
-            match scanner::run_full_scan(&platform, None, 50) {
+            match scanner::run_full_scan(&platform, None, 0, 0) {
                 Ok(results) => self.last_scan = Some(results),
                 Err(e) => {
                     eprintln!("Scan error: {}", e);
@@ -357,7 +376,7 @@ impl Shell {
             println!("Scanning for files larger than {} MB...\n", min_mb);
 
             if let Some(downloads) = platform.downloads_dir() {
-                match scanner::large_files::find_large_files(&[downloads], min_bytes) {
+                match scanner::large_files::find_large_files(&[downloads], min_bytes, 0) {
                     Ok(files) => {
                         if files.is_empty() {
                             println!("No files found larger than {} MB", min_mb);
@@ -421,13 +440,22 @@ impl Shell {
         }
     }
 
-    /// Parse --min-size argument
+    /// Parse --min-size argument (default: 0 = no minimum)
     fn parse_min_size(&self, args: &[String]) -> u64 {
         args.iter()
             .position(|a| a == "--min-size" || a == "-m")
             .and_then(|i| args.get(i + 1))
             .and_then(|s| s.parse().ok())
-            .unwrap_or(50)
+            .unwrap_or(0)
+    }
+
+    /// Parse --max-size argument (default: 0 = no maximum)
+    fn parse_max_size(&self, args: &[String]) -> u64 {
+        args.iter()
+            .position(|a| a == "--max-size" || a == "-M")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
     }
 
     /// Display scan summary
