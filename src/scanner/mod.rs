@@ -126,6 +126,7 @@ impl SafetyLevel {
 pub enum CleanupCategory {
     SystemCaches,
     AppCaches,
+    LargeRedownload,  // Safe but large re-download (e.g., ML models, app sync data)
     Logs,
     TempFiles,
     IOSBackups,
@@ -142,6 +143,7 @@ impl CleanupCategory {
             CleanupCategory::SystemCaches => SafetyLevel::Safe,
             CleanupCategory::AppCaches => SafetyLevel::Safe,
             CleanupCategory::TempFiles => SafetyLevel::Safe,
+            CleanupCategory::LargeRedownload => SafetyLevel::MostlySafe, // Safe but large download
             CleanupCategory::Logs => SafetyLevel::MostlySafe,
             CleanupCategory::IOSBackups => SafetyLevel::MostlySafe,
             CleanupCategory::XcodeData => SafetyLevel::MostlySafe,
@@ -156,6 +158,7 @@ impl CleanupCategory {
         match self {
             CleanupCategory::SystemCaches => "System Caches",
             CleanupCategory::AppCaches => "App Caches",
+            CleanupCategory::LargeRedownload => "Large Re-download",
             CleanupCategory::Logs => "Logs",
             CleanupCategory::TempFiles => "Temp Files",
             CleanupCategory::IOSBackups => "iOS Backups",
@@ -171,6 +174,7 @@ impl CleanupCategory {
         match self {
             CleanupCategory::SystemCaches => "📦",
             CleanupCategory::AppCaches => "📦",
+            CleanupCategory::LargeRedownload => "⬇️",
             CleanupCategory::Logs => "📋",
             CleanupCategory::TempFiles => "🗑️",
             CleanupCategory::IOSBackups => "📱",
@@ -343,7 +347,24 @@ pub fn run_full_scan<P: PlatformPaths>(
         }
     }
 
-    // 7. Downloads - large files
+    // 7. Large Re-download items (safe but large to re-download)
+    for dir in platform.large_redownload_dirs() {
+        if dir.exists() {
+            if let Ok(size) = calculate_dir_size(&dir) {
+                if size > 0 && meets_size_filter(size, min_bytes, max_bytes) {
+                    results.items.push(ScannedItem {
+                        path: dir,
+                        size,
+                        category: CleanupCategory::LargeRedownload,
+                        last_accessed: None,
+                        last_modified: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 8. Downloads - large files
     if let Some(downloads) = platform.downloads_dir() {
         if downloads.exists() {
             let large = large_files::find_large_files(&[downloads], min_bytes, max_bytes)?;

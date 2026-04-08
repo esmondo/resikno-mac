@@ -111,9 +111,78 @@ fn hash_file(path: &PathBuf) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
-    fn test_hash_file() {
-        // TODO: Add tests with tempfile
+    fn test_hash_file_basic() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        
+        // Create a test file
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        file.write_all(b"hello world").unwrap();
+        drop(file);
+        
+        // Hash it
+        let hash1 = hash_file(&file_path).unwrap();
+        let hash2 = hash_file(&file_path).unwrap();
+        
+        // Same file should have same hash
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1.len(), 64); // SHA256 is 64 hex chars
+    }
+
+    #[test]
+    fn test_hash_file_different_content() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file1 = temp_dir.path().join("test1.txt");
+        let file2 = temp_dir.path().join("test2.txt");
+        
+        // Create two files with different content
+        std::fs::write(&file1, "content A").unwrap();
+        std::fs::write(&file2, "content B").unwrap();
+        
+        // Different content should have different hashes
+        let hash1 = hash_file(&file1).unwrap();
+        let hash2 = hash_file(&file2).unwrap();
+        
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_duplicate_group_recoverable_space() {
+        let group = DuplicateGroup {
+            hash: "abc123".to_string(),
+            size: 1024,
+            files: vec![
+                PathBuf::from("/file1.txt"),
+                PathBuf::from("/file2.txt"),
+                PathBuf::from("/file3.txt"),
+            ],
+        };
+        
+        // Recoverable space = size * (n - 1)
+        assert_eq!(group.recoverable_space(), 1024 * 2);
+    }
+
+    #[test]
+    fn test_group_by_size_basic() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        
+        // Create files with different sizes
+        let file1 = temp_dir.path().join("file1.txt");
+        let file2 = temp_dir.path().join("file2.txt");
+        let file3 = temp_dir.path().join("file3.txt");
+        
+        std::fs::write(&file1, "a").unwrap(); // 1 byte
+        std::fs::write(&file2, "a").unwrap(); // 1 byte
+        std::fs::write(&file3, "bb").unwrap(); // 2 bytes
+        
+        let groups = group_by_size(&[temp_dir.path().to_path_buf()], 1).unwrap();
+        
+        // Should have 2 groups: size 1 and size 2
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[&1].len(), 2); // Two 1-byte files
+        assert_eq!(groups[&2].len(), 1); // One 2-byte file
     }
 }

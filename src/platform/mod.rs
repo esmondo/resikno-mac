@@ -34,8 +34,11 @@ pub trait PlatformPaths {
     /// Get downloads directory
     fn downloads_dir(&self) -> Option<PathBuf>;
 
-    /// Get the resikno-mak config directory
+    /// Get the resikno-mac config directory
     fn config_dir(&self) -> PathBuf;
+
+    /// Get large re-download paths (safe but large to re-download)
+    fn large_redownload_dirs(&self) -> Vec<PathBuf>;
 }
 
 /// Get the current platform implementation

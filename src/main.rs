@@ -36,14 +36,25 @@ fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() == 1 {
-        // No arguments: enter interactive shell mode
-        let mut shell = shell::Shell::new()?;
-        shell.run()
+        // No arguments: launch TUI directly (like Claude Code)
+        launch_tui_direct()
     } else {
         // With arguments: traditional subcommand mode (backwards compatible)
         let cli = cli::Cli::parse();
         cli::commands::execute(cli)
     }
+}
+
+/// Launch TUI directly with a fresh scan
+fn launch_tui_direct() -> Result<()> {
+    use crate::platform;
+    use crate::scanner;
+    use crate::ui;
+    
+    // Run scan and go straight to TUI
+    let platform = platform::current();
+    let results = scanner::run_full_scan(&platform, None, 0, 0)?;
+    ui::run_tui(results)
 }
 
 /// Print a user-friendly error message

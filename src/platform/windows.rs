@@ -76,6 +76,11 @@ impl PlatformPaths for WindowsPaths {
     }
 
     fn config_dir(&self) -> PathBuf {
-        self.local_app_data.join("resikno-mak")
+        self.local_app_data.join("resikno-mac")
+    }
+
+    fn large_redownload_dirs(&self) -> Vec<PathBuf> {
+        // TODO: Add Windows-specific large re-download paths
+        vec![]
     }
 }

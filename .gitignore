@@ -1,8 +1,33 @@
+# Rust build artifacts
 /target
+Cargo.lock
 
-# Sensitive documentation (PRD, plans, internal docs)
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sensitive documentation (internal plans, PRDs)
+/docs/superpowers/
 /docs/plans/
 CLAUDE.md
+IMPLEMENTATION_PLAN.md
 
-# Local Claude settings
+# Local development settings
+.agents/
 .claude/settings.local.json
+
+# Test outputs
+*.log
+/test-output/
+
+# Temporary files
+*.tmp
+*.temp

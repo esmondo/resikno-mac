@@ -162,6 +162,127 @@ fn get_deletion_reason(path: &PathBuf) -> String {
     }
 }
 
+/// Restore a restore point
+/// 
+/// Since files are moved to Trash (not backed up), this attempts to restore from Trash.
+/// Returns the number of items successfully restored.
+pub fn restore_restore_point(restore_point_id: &str) -> Result<(usize, usize)> {
+    let restore_path = restore_dir()?.join(restore_point_id);
+    let manifest_path = restore_path.join("manifest.json");
+    
+    if !manifest_path.exists() {
+        anyhow::bail!("Restore point '{}' not found", restore_point_id);
+    }
+    
+    // Read manifest
+    let manifest_json = fs::read_to_string(&manifest_path)?;
+    let manifest: Manifest = serde_json::from_str(&manifest_json)?;
+    
+    let mut restored = 0;
+    let mut failed = 0;
+    
+    for entry in &manifest.items {
+        // Check if file still exists (wasn't actually deleted)
+        if entry.path.exists() {
+            restored += 1; // Already there
+            continue;
+        }
+        
+        // Try to restore from Trash
+        match restore_from_trash(&entry.path) {
+            Ok(true) => restored += 1,
+            Ok(false) => failed += 1,
+            Err(_) => failed += 1,
+        }
+    }
+    
+    Ok((restored, failed))
+}
+
+/// Attempt to restore a file from Trash
+/// 
+/// On macOS, Trash is at ~/.Trash/ but Finder manages it.
+/// This function attempts to find the file in Trash by name and restore it.
+#[cfg(target_os = "macos")]
+fn restore_from_trash(original_path: &PathBuf) -> Result<bool> {
+    use std::process::Command;
+    
+    let file_name = original_path.file_name()
+        .ok_or_else(|| anyhow::anyhow!("Invalid path"))?
+        .to_string_lossy();
+    
+    // Try to find the file in Trash
+    let trash_path = directories::UserDirs::new()
+        .map(|d| d.home_dir().join(".Trash").join(file_name.as_ref()));
+    
+    if let Some(trash_file) = trash_path {
+        if trash_file.exists() {
+            // Ensure parent directory exists
+            if let Some(parent) = original_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            
+            // Move from Trash back to original location
+            fs::rename(&trash_file, original_path)?;
+            return Ok(true);
+        }
+    }
+    
+    // Try using AppleScript to restore from Trash via Finder
+    // This handles cases where the file might have been renamed in Trash
+    let script = format!(
+        r#"tell application "Finder"
+            set trashItems to every item of trash
+            repeat with i in trashItems
+                if name of i is "{}" then
+                    move i to folder "{}" of (path to home folder)
+                    return "restored"
+                end if
+            end repeat
+            return "not_found"
+        end tell"#,
+        file_name,
+        original_path.parent()
+            .and_then(|p| p.strip_prefix(directories::UserDirs::new()?.home_dir()).ok())
+            .map(|p| p.to_string_lossy().replace('/', ":"))
+            .unwrap_or_default()
+    );
+    
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output();
+    
+    match output {
+        Ok(out) => {
+            let result = String::from_utf8_lossy(&out.stdout);
+            Ok(result.trim() == "restored")
+        }
+        Err(_) => Ok(false),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn restore_from_trash(_original_path: &PathBuf) -> Result<bool> {
+    // Non-macOS: restoration not implemented
+    Ok(false)
+}
+
+/// Get detailed information about a restore point
+pub fn get_restore_point_details(restore_point_id: &str) -> Result<Manifest> {
+    let restore_path = restore_dir()?.join(restore_point_id);
+    let manifest_path = restore_path.join("manifest.json");
+    
+    if !manifest_path.exists() {
+        anyhow::bail!("Restore point '{}' not found", restore_point_id);
+    }
+    
+    let manifest_json = fs::read_to_string(&manifest_path)?;
+    let manifest: Manifest = serde_json::from_str(&manifest_json)?;
+    
+    Ok(manifest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

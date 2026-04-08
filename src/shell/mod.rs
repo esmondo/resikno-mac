@@ -204,22 +204,28 @@ impl Shell {
         let min_size = self.parse_min_size(args);
         let max_size = self.parse_max_size(args);
         let platform = platform::current();
+        let no_interactive = args.iter().any(|a| a == "--no-interactive");
 
-        let size_filter_msg = match (min_size, max_size) {
-            (0, 0) => "no size filter".to_string(),
-            (min, 0) => format!("min: {} MB", min),
-            (0, max) => format!("max: {} MB", max),
-            (min, max) => format!("{}-{} MB", min, max),
-        };
-        println!("Scanning system for cleanable files ({})...\n", size_filter_msg);
+        // Only print scan message if not going straight to TUI
+        if no_interactive {
+            let size_filter_msg = match (min_size, max_size) {
+                (0, 0) => "no size filter".to_string(),
+                (min, 0) => format!("min: {} MB", min),
+                (0, max) => format!("max: {} MB", max),
+                (min, max) => format!("{}-{} MB", min, max),
+            };
+            println!("Scanning system for cleanable files ({})...\n", size_filter_msg);
+        }
 
         match scanner::run_full_scan(&platform, None, min_size, max_size) {
             Ok(results) => {
-                self.display_scan_summary(&results);
                 self.last_scan = Some(results.clone());
 
-                // Launch TUI unless --no-interactive
-                if !args.iter().any(|a| a == "--no-interactive") {
+                if no_interactive {
+                    // Show summary in CLI mode
+                    self.display_scan_summary(&results);
+                } else {
+                    // Launch TUI directly (results shown in UI)
                     if let Err(e) = ui::run_tui(results) {
                         eprintln!("TUI error: {}", e);
                     }
@@ -260,6 +266,7 @@ impl Shell {
         let category = args.first().map(|s| s.as_str()).unwrap_or("all");
         let execute = args.iter().any(|a| a == "--execute");
         let safe_only = args.iter().any(|a| a == "--safe-only");
+        let force = args.iter().any(|a| a == "--force" || a == "-f");
 
         // Run scan if we don't have results
         if self.last_scan.is_none() {
@@ -333,20 +340,37 @@ impl Shell {
                 println!("  ... and {} more", items_to_clean.len() - 10);
             }
         } else {
+            // Show confirmation unless --force is used
+            if !force {
+                print!("\nProceed with cleanup? [y/N] ");
+                use std::io::{Write, stdin};
+                std::io::stdout().flush().ok();
+                
+                let mut input = String::new();
+                if stdin().read_line(&mut input).is_ok() && !input.trim().eq_ignore_ascii_case("y") {
+                    println!("Cleanup cancelled.");
+                    return;
+                }
+            }
+            
             println!("\nCleaning {} items...", items_to_clean.len());
 
-            let paths: Vec<_> = items_to_clean.iter().map(|i| i.path.clone()).collect();
+            // Convert to owned ScannedItems for cleanup
+            let items: Vec<_> = items_to_clean.into_iter().cloned().collect();
             let options = CleanupOptions {
                 execute: true,
                 create_restore_point: true,
                 safe_only,
-                force: false,
+                force,
             };
 
-            match cleaner::cleanup(&paths, &options) {
+            match cleaner::cleanup_items(&items, &options) {
                 Ok(result) => {
                     println!("\nCleanup complete!");
                     println!("   Deleted: {} items", result.items_deleted);
+                    if result.items_skipped > 0 {
+                        println!("   Skipped: {} items (safety level)", result.items_skipped);
+                    }
                     println!("   Freed: {}", ByteSize(result.bytes_freed));
 
                     if let Some(restore) = result.restore_point {
@@ -379,7 +403,41 @@ impl Shell {
 
         if duplicates {
             println!("Scanning for duplicate files...\n");
-            println!("Duplicate detection coming soon.");
+            
+            let platform = platform::current();
+            if let Some(home) = platform.downloads_dir() {
+                let min_size = 1024 * 1024; // 1 MB minimum
+                match scanner::duplicates::find_duplicates(&[home], min_size) {
+                    Ok(dupes) => {
+                        if dupes.is_empty() {
+                            println!("No duplicate files found (>1MB).");
+                        } else {
+                            let total_recoverable: u64 = dupes.iter()
+                                .map(|g| g.recoverable_space())
+                                .sum();
+                            
+                            println!("Found {} duplicate groups, {} recoverable:\n", 
+                                dupes.len(), ByteSize(total_recoverable));
+                            
+                            for (i, group) in dupes.iter().take(5).enumerate() {
+                                println!("  Group {} ({} each):", 
+                                    i + 1,
+                                    ByteSize(group.size));
+                                for file in &group.files {
+                                    println!("    📄 {}", file.display());
+                                }
+                            }
+                            
+                            if dupes.len() > 5 {
+                                println!("\n  ... and {} more groups", dupes.len() - 5);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error scanning for duplicates: {}", e);
+                    }
+                }
+            }
         }
 
         if let Some(min_mb) = large {
@@ -423,6 +481,7 @@ impl Shell {
     /// Restore command
     fn cmd_restore(&self, args: &[String]) {
         let list = args.iter().any(|a| a == "--list") || args.is_empty();
+        let latest = args.iter().any(|a| a == "--latest");
 
         if list {
             match crate::cleaner::backup::list_restore_points() {
@@ -447,8 +506,61 @@ impl Shell {
                 }
                 Err(e) => eprintln!("Error listing restore points: {}", e),
             }
-        } else {
-            println!("Restore functionality coming soon.");
+        } else if latest || !args.is_empty() {
+            // Try to restore
+            let target_id = if latest {
+                match crate::cleaner::backup::list_restore_points() {
+                    Ok(points) => points.first().map(|p| p.id.clone()),
+                    Err(_) => None,
+                }
+            } else {
+                Some(args[0].clone())
+            };
+            
+            match target_id {
+                Some(id) => {
+                    match crate::cleaner::backup::get_restore_point_details(&id) {
+                        Ok(manifest) => {
+                            println!("🔄 Restore point: {}", id);
+                            println!("   Items: {}", manifest.items.len());
+                            println!("   Size: {}", ByteSize(manifest.total_size));
+                            
+                            println!("\nFiles to restore:");
+                            for (i, entry) in manifest.items.iter().take(5).enumerate() {
+                                let status = if entry.path.exists() { "✅" } else { "🗑️" };
+                                println!("  {} {} ({})", status, entry.path.display(), ByteSize(entry.size));
+                            }
+                            if manifest.items.len() > 5 {
+                                println!("  ... and {} more", manifest.items.len() - 5);
+                            }
+                            
+                            println!("\nNote: Files are restored from Trash if still available.");
+                            print!("Proceed with restore? [y/N] ");
+                            use std::io::{Write, stdin};
+                            std::io::stdout().flush().ok();
+                            
+                            let mut input = String::new();
+                            if stdin().read_line(&mut input).is_ok() && input.trim().eq_ignore_ascii_case("y") {
+                                println!("\nRestoring files...");
+                                match crate::cleaner::backup::restore_restore_point(&id) {
+                                    Ok((restored, failed)) => {
+                                        println!("\n✅ Restore complete!");
+                                        println!("   Restored: {} items", restored);
+                                        if failed > 0 {
+                                            println!("   Failed: {} items (may have been permanently deleted)", failed);
+                                        }
+                                    }
+                                    Err(e) => eprintln!("\n❌ Restore failed: {}", e),
+                                }
+                            } else {
+                                println!("Restore cancelled.");
+                            }
+                        }
+                        Err(e) => eprintln!("Could not read restore point: {}", e),
+                    }
+                }
+                None => println!("No restore point available."),
+            }
         }
     }
 

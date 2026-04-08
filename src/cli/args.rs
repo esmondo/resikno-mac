@@ -54,6 +54,10 @@ pub enum Commands {
         /// Only clean items marked as SAFE
         #[arg(long)]
         safe_only: bool,
+        
+        /// Skip confirmation prompts
+        #[arg(short, long)]
+        force: bool,
     },
 
     /// Analyze disk usage

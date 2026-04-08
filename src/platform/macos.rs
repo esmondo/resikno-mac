@@ -27,9 +27,7 @@ impl Default for MacOSPaths {
 impl PlatformPaths for MacOSPaths {
     fn cache_dirs(&self) -> Vec<PathBuf> {
         vec![
-            // System caches
-            PathBuf::from("/Library/Caches"),
-            // User caches
+            // User caches only (system caches need root)
             self.home.join("Library/Caches"),
         ]
     }
@@ -53,25 +51,39 @@ impl PlatformPaths for MacOSPaths {
             // Media
             user_caches.join("com.spotify.client"),
             user_caches.join("com.apple.Music"),
+            // Dev tool caches (from decisions.md TD-003) - SAFE to delete
+            self.home.join(".npm/_cacache"),           // npm cache (often 5GB+)
+            self.home.join(".cargo/registry/cache"),   // Cargo crate cache
+            self.home.join(".cargo/git/checkouts"),    // Cargo git cache
+            self.home.join(".pnpm-store"),             // pnpm global store
+            self.home.join(".bun/install/cache"),      // Bun cache
+            user_caches.join("electron"),              // Electron framework cache
+            user_caches.join("electron-builder"),      // electron-builder cache
+            user_caches.join("ms-playwright-go"),      // Playwright browser binaries
         ]
     }
 
     fn log_dirs(&self) -> Vec<PathBuf> {
         vec![
-            // System logs
-            PathBuf::from("/var/log"),
-            PathBuf::from("/Library/Logs"),
-            // User logs
+            // User logs only (system logs need root)
             self.home.join("Library/Logs"),
         ]
     }
 
     fn temp_dirs(&self) -> Vec<PathBuf> {
-        vec![
-            PathBuf::from("/tmp"),
-            PathBuf::from("/var/tmp"),
-            PathBuf::from("/private/var/folders"), // macOS temp folders
-        ]
+        // User temp folders on macOS
+        // Use TMPDIR env var which points to /var/folders/xx/xxxxxx/T/
+        let mut temps = Vec::new();
+        
+        // Primary user temp directory from environment
+        if let Ok(tmpdir) = std::env::var("TMPDIR") {
+            temps.push(PathBuf::from(tmpdir));
+        }
+        
+        // Fallback: macOS-specific temp locations
+        temps.push(self.home.join("Library/Containers"));
+        
+        temps
     }
 
     fn mobile_backup_dirs(&self) -> Vec<PathBuf> {
@@ -100,7 +112,16 @@ impl PlatformPaths for MacOSPaths {
     }
 
     fn config_dir(&self) -> PathBuf {
-        self.home.join(".resikno-mak")
+        self.home.join(".resikno-mac")
+    }
+
+    fn large_redownload_dirs(&self) -> Vec<PathBuf> {
+        let user_caches = self.home.join("Library/Caches");
+        vec![
+            // From decisions.md - safe but large re-download
+            user_caches.join("SiriTTS/BNNSModels"),  // 968 MB ML models
+            user_caches.join("Comet"),               // Linear app, 940 MB, will re-sync
+        ]
     }
 }
 
@@ -157,6 +178,6 @@ mod tests {
 
         // Config dir should be in home
         let config = paths.config_dir();
-        assert!(config.to_string_lossy().contains(".resikno-mak"));
+        assert!(config.to_string_lossy().contains(".resikno-mac"));
     }
 }

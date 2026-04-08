@@ -70,6 +70,11 @@ impl PlatformPaths for LinuxPaths {
     }
 
     fn config_dir(&self) -> PathBuf {
-        self.home.join(".config/resikno-mak")
+        self.home.join(".config/resikno-mac")
+    }
+
+    fn large_redownload_dirs(&self) -> Vec<PathBuf> {
+        // TODO: Add Linux-specific large re-download paths
+        vec![]
     }
 }
