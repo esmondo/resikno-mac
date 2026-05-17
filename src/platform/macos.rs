@@ -71,18 +71,20 @@ impl PlatformPaths for MacOSPaths {
     }
 
     fn temp_dirs(&self) -> Vec<PathBuf> {
-        // User temp folders on macOS
-        // Use TMPDIR env var which points to /var/folders/xx/xxxxxx/T/
+        // User temp folders on macOS.
+        //
+        // IMPORTANT: ~/Library/Containers is NOT a temp directory. It holds
+        // sandboxed app state for Mail, Notes, Messages, iCloud Drive caches,
+        // app preferences, drafts, and login data. Wiping it loses user data.
+        // Do not add it back here. App-specific caches inside containers are
+        // already covered via cache_dirs().
         let mut temps = Vec::new();
-        
-        // Primary user temp directory from environment
+
+        // Primary user temp directory from environment (/var/folders/xx/xxxxxx/T/).
         if let Ok(tmpdir) = std::env::var("TMPDIR") {
             temps.push(PathBuf::from(tmpdir));
         }
-        
-        // Fallback: macOS-specific temp locations
-        temps.push(self.home.join("Library/Containers"));
-        
+
         temps
     }
 

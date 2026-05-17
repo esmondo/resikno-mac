@@ -391,7 +391,26 @@ pub fn run_full_scan<P: PlatformPaths>(
     Ok(results)
 }
 
-/// Calculate the total size of a directory
+/// Physical disk usage of a file in bytes.
+///
+/// Uses allocated block count rather than logical (apparent) length so
+/// sparse files and APFS clones don't inflate reported size. macOS app
+/// Containers commonly hold sparse CoreData/SQLite databases whose
+/// logical size is tens of GB but whose on-disk footprint is tiny.
+pub fn file_disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // st_blocks is in 512-byte units on macOS and Linux.
+        metadata.blocks().saturating_mul(512)
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.len()
+    }
+}
+
+/// Calculate the total physical disk usage of a directory
 fn calculate_dir_size(path: &Path) -> Result<u64> {
     use walkdir::WalkDir;
 
@@ -403,7 +422,7 @@ fn calculate_dir_size(path: &Path) -> Result<u64> {
     {
         if entry.file_type().is_file() {
             if let Ok(metadata) = entry.metadata() {
-                total += metadata.len();
+                total += file_disk_usage(&metadata);
             }
         }
     }
@@ -447,7 +466,7 @@ pub fn scan_directory_children(path: &Path) -> Result<Vec<ChildEntry>> {
         let size = if is_dir {
             calculate_dir_size(&entry_path).unwrap_or(0)
         } else {
-            metadata.len()
+            file_disk_usage(&metadata)
         };
 
         // Skip empty entries
