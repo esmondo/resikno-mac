@@ -98,8 +98,6 @@ pub fn safe_delete(path: &Path) -> Result<u64> {
 /// This is the PREFERRED method - items can be recovered from Trash
 #[cfg(target_os = "macos")]
 pub fn move_to_trash(path: &Path) -> Result<u64> {
-    use std::process::Command;
-
     // Run safety checks first
     match check_deletion_safety(path)? {
         SafetyCheckResult::Blocked(reason) => {
@@ -113,23 +111,54 @@ pub fn move_to_trash(path: &Path) -> Result<u64> {
 
     let size = calculate_dir_size(path)?;
 
-    // Use macOS Finder to move to trash (recoverable)
+    // For large directories (e.g. ~/Library/Caches), asking Finder to
+    // trash the whole tree in one AppleEvent reliably hits the 60-second
+    // timeout because Finder pre-enumerates every descendant. Instead
+    // we walk the immediate children and trash them individually, with
+    // an explicit AppleScript `with timeout` clause. Children locked by
+    // running apps (Safari, Spotlight) are skipped, not fatal.
+    if path.is_dir() {
+        let mut errors: Vec<String> = Vec::new();
+        let entries = std::fs::read_dir(path)
+            .with_context(|| format!("Failed to list directory: {}", path.display()))?;
+        for entry in entries.filter_map(|e| e.ok()) {
+            let child = entry.path();
+            if let Err(e) = trash_one(&child) {
+                errors.push(format!("{}: {}", child.display(), e));
+            }
+        }
+        if !errors.is_empty() {
+            // Surface the first failure but keep the partial freed bytes.
+            eprintln!("Warning: {} child item(s) could not be trashed.", errors.len());
+            for line in errors.iter().take(5) {
+                eprintln!("  - {}", line);
+            }
+        }
+        return Ok(size);
+    }
+
+    trash_one(path)?;
+    Ok(size)
+}
+
+#[cfg(target_os = "macos")]
+fn trash_one(path: &Path) -> Result<()> {
+    use std::process::Command;
+
+    let script = format!(
+        "with timeout of 600 seconds\n\
+         tell application \"Finder\" to delete POSIX file \"{}\"\n\
+         end timeout",
+        path.display()
+    );
     let status = Command::new("osascript")
-        .args([
-            "-e",
-            &format!(
-                "tell application \"Finder\" to delete POSIX file \"{}\"",
-                path.display()
-            ),
-        ])
+        .args(["-e", &script])
         .status()
         .with_context(|| "Failed to execute osascript")?;
-
     if !status.success() {
         bail!("Failed to move to trash: {}", path.display());
     }
-
-    Ok(size)
+    Ok(())
 }
 
 /// Move to trash (non-macOS fallback)
